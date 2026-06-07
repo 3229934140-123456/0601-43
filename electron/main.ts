@@ -142,6 +142,27 @@ function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (api_id) REFERENCES apis(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS request_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      api_id INTEGER,
+      project_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      method TEXT NOT NULL DEFAULT 'GET',
+      url TEXT NOT NULL,
+      params TEXT DEFAULT '[]',
+      headers TEXT DEFAULT '[]',
+      body_type TEXT DEFAULT 'none',
+      body TEXT DEFAULT '',
+      last_status_code INTEGER,
+      last_duration INTEGER,
+      last_response TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (api_id) REFERENCES apis(id) ON DELETE SET NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `);
 
   const settingStmt = db.prepare('SELECT COUNT(*) as count FROM settings');
@@ -651,10 +672,69 @@ ipcMain.handle('search-apis', (_event, projectId: number, keyword: string) => {
   return stmt.all(projectId, searchKeyword, searchKeyword, searchKeyword);
 });
 
+ipcMain.handle('get-request-cases', (_event, apiId: number | null, projectId: number) => {
+  if (apiId) {
+    const stmt = db!.prepare('SELECT * FROM request_cases WHERE api_id = ? ORDER BY sort_order ASC, created_at DESC');
+    return stmt.all(apiId);
+  }
+  const stmt = db!.prepare('SELECT * FROM request_cases WHERE project_id = ? ORDER BY sort_order ASC, created_at DESC');
+  return stmt.all(projectId);
+});
+
+ipcMain.handle('create-request-case', (_event, data: any) => {
+  const stmt = db!.prepare(`
+    INSERT INTO request_cases (api_id, project_id, name, method, url, params, headers, body_type, body)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    data.api_id || null,
+    data.project_id,
+    data.name,
+    data.method || 'GET',
+    data.url,
+    data.params || '[]',
+    data.headers || '[]',
+    data.body_type || 'none',
+    data.body || ''
+  );
+  return result.lastInsertRowid;
+});
+
+ipcMain.handle('update-request-case', (_event, id: number, data: any) => {
+  const stmt = db!.prepare(`
+    UPDATE request_cases SET 
+      name = ?, method = ?, url = ?, params = ?, headers = ?, 
+      body_type = ?, body = ?, last_status_code = ?, last_duration = ?, 
+      last_response = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  stmt.run(
+    data.name,
+    data.method,
+    data.url,
+    data.params,
+    data.headers,
+    data.body_type,
+    data.body,
+    data.last_status_code || null,
+    data.last_duration || null,
+    data.last_response || null,
+    id
+  );
+  return true;
+});
+
+ipcMain.handle('delete-request-case', (_event, id: number) => {
+  const stmt = db!.prepare('DELETE FROM request_cases WHERE id = ?');
+  stmt.run(id);
+  return true;
+});
+
 ipcMain.handle('clear-all-data', () => {
   try {
     db!.exec(`
       DELETE FROM request_history;
+      DELETE FROM request_cases;
       DELETE FROM comments;
       DELETE FROM review_items;
       DELETE FROM api_versions;

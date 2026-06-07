@@ -49,6 +49,11 @@ const api = {
 
   searchApis: (projectId: number, keyword: string) => ipcRenderer.invoke('search-apis', projectId, keyword),
 
+  getRequestCases: (apiId: number | null, projectId: number) => ipcRenderer.invoke('get-request-cases', apiId, projectId),
+  createRequestCase: (data: any) => ipcRenderer.invoke('create-request-case', data),
+  updateRequestCase: (id: number, data: any) => ipcRenderer.invoke('update-request-case', id, data),
+  deleteRequestCase: (id: number) => ipcRenderer.invoke('delete-request-case', id),
+
   clearAllData: () => ipcRenderer.invoke('clear-all-data'),
 };
 

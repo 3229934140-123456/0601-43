@@ -117,6 +117,25 @@ export interface RequestHistory {
   created_at: string;
 }
 
+export interface RequestCase {
+  id: number;
+  api_id: number | null;
+  project_id: number;
+  name: string;
+  method: string;
+  url: string;
+  params: string;
+  headers: string;
+  body_type: string;
+  body: string;
+  last_status_code: number | null;
+  last_duration: number | null;
+  last_response: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type MethodType = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
 
 export const HTTP_METHODS: MethodType[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];

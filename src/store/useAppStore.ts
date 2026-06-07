@@ -17,6 +17,7 @@ interface AppState {
   apiVersions: ApiVersion[];
   requestResult: RequestResult | null;
   requestHistory: RequestHistory[];
+  requestCases: any[];
   isLoading: boolean;
 
   loadProjects: () => Promise<void>;
