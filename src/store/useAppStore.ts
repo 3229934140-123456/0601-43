@@ -65,6 +65,11 @@ interface AppState {
   sendRequest: (config: any) => Promise<void>;
   loadRequestHistory: (apiId: number) => Promise<void>;
 
+  loadRequestCases: (apiId: number | null, projectId: number) => Promise<void>;
+  createRequestCase: (data: any) => Promise<number>;
+  updateRequestCase: (id: number, data: any) => Promise<void>;
+  deleteRequestCase: (id: number) => Promise<void>;
+
   exportProject: (projectId: number) => Promise<{ success: boolean; path?: string }>;
   importProject: () => Promise<{ success: boolean; projectId?: number; error?: string }>;
 
