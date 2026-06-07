@@ -46,6 +46,9 @@ const api = {
 
   exportProject: (projectId: number) => ipcRenderer.invoke('export-project', projectId),
   importProject: () => ipcRenderer.invoke('import-project'),
+  exportSelectedApis: (projectId: number, apiIds: number[]) => ipcRenderer.invoke('export-selected-apis', projectId, apiIds),
+  batchMoveApis: (apiIds: number[], folderId: number | null) => ipcRenderer.invoke('batch-move-apis', apiIds, folderId),
+  batchDeprecateApis: (apiIds: number[], isDeprecated: boolean) => ipcRenderer.invoke('batch-deprecate-apis', apiIds, isDeprecated),
 
   searchApis: (projectId: number, keyword: string) => ipcRenderer.invoke('search-apis', projectId, keyword),
 

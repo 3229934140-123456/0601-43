@@ -588,6 +588,57 @@ ipcMain.handle('export-project', async (_event, projectId: number) => {
   return { success: false };
 });
 
+ipcMain.handle('export-selected-apis', async (_event, projectId: number, apiIds: number[]) => {
+  const project = db!.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+  const folders = db!.prepare('SELECT * FROM folders WHERE project_id = ?').all(projectId);
+  const placeholders = apiIds.map(() => '?').join(',');
+  const apis = db!.prepare(`SELECT * FROM apis WHERE id IN (${placeholders})`).all(...apiIds);
+  
+  const exportData = {
+    version: '1.0',
+    exported_at: new Date().toISOString(),
+    type: 'selected_apis',
+    project,
+    folders,
+    apis,
+  };
+  
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    title: '导出选中接口',
+    defaultPath: `selected-apis-${new Date().getTime()}.json`,
+    filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+  });
+  
+  if (!result.canceled && result.filePath) {
+    fs.writeFileSync(result.filePath, JSON.stringify(exportData, null, 2));
+    return { success: true, path: result.filePath };
+  }
+  
+  return { success: false };
+});
+
+ipcMain.handle('batch-move-apis', (_event, apiIds: number[], folderId: number | null) => {
+  const stmt = db!.prepare('UPDATE apis SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  const transaction = db!.transaction((ids: number[]) => {
+    for (const id of ids) {
+      stmt.run(folderId, id);
+    }
+  });
+  transaction(apiIds);
+  return { success: true };
+});
+
+ipcMain.handle('batch-deprecate-apis', (_event, apiIds: number[], isDeprecated: boolean) => {
+  const stmt = db!.prepare('UPDATE apis SET is_deprecated = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  const transaction = db!.transaction((ids: number[]) => {
+    for (const id of ids) {
+      stmt.run(isDeprecated ? 1 : 0, id);
+    }
+  });
+  transaction(apiIds);
+  return { success: true };
+});
+
 ipcMain.handle('import-project', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     title: '导入项目',

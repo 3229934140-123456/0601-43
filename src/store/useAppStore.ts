@@ -19,7 +19,9 @@ interface AppState {
   requestHistory: RequestHistory[];
   requestCases: any[];
   isLoading: boolean;
+  activeModule: string;
 
+  setActiveModule: (module: string) => void;
   loadProjects: () => Promise<void>;
   createProject: (name: string, description: string) => Promise<number>;
   updateProject: (id: number, name: string, description: string) => Promise<void>;
@@ -72,6 +74,9 @@ interface AppState {
 
   exportProject: (projectId: number) => Promise<{ success: boolean; path?: string }>;
   importProject: () => Promise<{ success: boolean; projectId?: number; error?: string }>;
+  exportSelectedApis: (projectId: number, apiIds: number[]) => Promise<{ success: boolean; path?: string }>;
+  batchMoveApis: (apiIds: number[], folderId: number | null) => Promise<void>;
+  batchDeprecateApis: (apiIds: number[], isDeprecated: boolean) => Promise<void>;
 
   searchApis: (projectId: number, keyword: string) => Promise<void>;
   setSearchKeyword: (keyword: string) => void;
@@ -95,7 +100,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   apiVersions: [],
   requestResult: null,
   requestHistory: [],
+  requestCases: [],
   isLoading: false,
+  activeModule: 'projects',
+
+  setActiveModule: (module: string) => {
+    set({ activeModule: module });
+  },
 
   loadProjects: async () => {
     const projects = await (window as any).electronAPI.getProjects();
@@ -301,12 +312,45 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ requestHistory: history });
   },
 
+  loadRequestCases: async (apiId: number | null, projectId: number) => {
+    const cases = await (window as any).electronAPI.getRequestCases(apiId, projectId);
+    set({ requestCases: cases });
+  },
+
+  createRequestCase: async (data: any) => {
+    const id = await (window as any).electronAPI.createRequestCase(data);
+    if (data.project_id) {
+      await get().loadRequestCases(data.api_id || null, data.project_id);
+    }
+    return id;
+  },
+
+  updateRequestCase: async (id: number, data: any) => {
+    await (window as any).electronAPI.updateRequestCase(id, data);
+  },
+
+  deleteRequestCase: async (id: number) => {
+    await (window as any).electronAPI.deleteRequestCase(id);
+  },
+
   exportProject: async (projectId: number) => {
     return await (window as any).electronAPI.exportProject(projectId);
   },
 
   importProject: async () => {
     return await (window as any).electronAPI.importProject();
+  },
+
+  exportSelectedApis: async (projectId: number, apiIds: number[]) => {
+    return await (window as any).electronAPI.exportSelectedApis(projectId, apiIds);
+  },
+
+  batchMoveApis: async (apiIds: number[], folderId: number | null) => {
+    await (window as any).electronAPI.batchMoveApis(apiIds, folderId);
+  },
+
+  batchDeprecateApis: async (apiIds: number[], isDeprecated: boolean) => {
+    await (window as any).electronAPI.batchDeprecateApis(apiIds, isDeprecated);
   },
 
   searchApis: async (projectId: number, keyword: string) => {
@@ -339,6 +383,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         apiVersions: [],
         requestResult: null,
         requestHistory: [],
+        requestCases: [],
       });
       await loadSettings();
     }

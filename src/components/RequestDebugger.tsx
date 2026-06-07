@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { METHOD_COLORS, HTTP_METHODS } from '../types';
-import type { API, APIParam } from '../types';
+import type { API, APIParam, RequestCase } from '../types';
 
 function RequestDebugger() {
   const {
@@ -11,7 +11,6 @@ function RequestDebugger() {
     currentEnvironmentId,
     setCurrentEnvironment,
     apis,
-    loadApis,
     loadAllApis,
     requestResult,
     sendRequest,
@@ -19,6 +18,13 @@ function RequestDebugger() {
     requestHistory,
     loadRequestHistory,
     settings,
+    requestCases,
+    loadRequestCases,
+    createRequestCase,
+    updateRequestCase,
+    deleteRequestCase,
+    updateApi,
+    loadApi,
   } = useAppStore();
 
   const [method, setMethod] = useState('GET');
@@ -27,9 +33,15 @@ function RequestDebugger() {
   const [headers, setHeaders] = useState<APIParam[]>([{ key: '', value: '', description: '' }]);
   const [bodyType, setBodyType] = useState<'none' | 'json' | 'form' | 'raw'>('none');
   const [body, setBody] = useState('');
-  const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body' | 'history'>('params');
+  const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body' | 'cases' | 'history'>('cases');
   const [selectedApiId, setSelectedApiId] = useState<number | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null);
   const [showApiSelector, setShowApiSelector] = useState(false);
+  const [showNewCaseInput, setShowNewCaseInput] = useState(false);
+  const [newCaseName, setNewCaseName] = useState('');
+  const [caseSaved, setCaseSaved] = useState(false);
+  const [responseSaved, setResponseSaved] = useState(false);
+  const apiSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (currentProjectId) {
@@ -38,10 +50,21 @@ function RequestDebugger() {
   }, [currentProjectId]);
 
   useEffect(() => {
-    if (selectedApiId) {
+    if (selectedApiId && currentProjectId) {
       loadRequestHistory(selectedApiId);
+      loadRequestCases(selectedApiId, currentProjectId);
     }
-  }, [selectedApiId]);
+  }, [selectedApiId, currentProjectId]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (apiSelectorRef.current && !apiSelectorRef.current.contains(e.target as Node)) {
+        setShowApiSelector(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const currentEnv = environments.find(e => e.id === currentEnvironmentId);
   let envVars: Record<string, string> = {};
@@ -53,6 +76,109 @@ function RequestDebugger() {
     return str.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       return envVars[key] || '';
     });
+  };
+
+  const selectApi = (api: API) => {
+    setSelectedApiId(api.id);
+    setSelectedCaseId(null);
+    setMethod(api.method);
+    
+    let baseUrl = envVars.baseURL || '';
+    setUrl(baseUrl + api.path);
+
+    try {
+      const parsedParams = JSON.parse(api.request_params || '[]');
+      setParams(parsedParams.length > 0 ? parsedParams : [{ key: '', value: '', description: '' }]);
+    } catch {
+      setParams([{ key: '', value: '', description: '' }]);
+    }
+    try {
+      const parsedHeaders = JSON.parse(api.request_headers || '[]');
+      setHeaders(parsedHeaders.length > 0 ? parsedHeaders : [{ key: '', value: '', description: '' }]);
+    } catch {
+      setHeaders([{ key: '', value: '', description: '' }]);
+    }
+    setBodyType((api.request_body_type as any) || 'none');
+    setBody(api.request_body || '');
+    setShowApiSelector(false);
+  };
+
+  const selectCase = (caseItem: RequestCase) => {
+    setSelectedCaseId(caseItem.id);
+    setMethod(caseItem.method);
+    setUrl(caseItem.url);
+    
+    try {
+      const parsedParams = JSON.parse(caseItem.params || '[]');
+      setParams(parsedParams.length > 0 ? parsedParams : [{ key: '', value: '', description: '' }]);
+    } catch {
+      setParams([{ key: '', value: '', description: '' }]);
+    }
+    try {
+      const parsedHeaders = JSON.parse(caseItem.headers || '[]');
+      setHeaders(parsedHeaders.length > 0 ? parsedHeaders : [{ key: '', value: '', description: '' }]);
+    } catch {
+      setHeaders([{ key: '', value: '', description: '' }]);
+    }
+    setBodyType((caseItem.body_type as any) || 'none');
+    setBody(caseItem.body || '');
+  };
+
+  const handleSaveCase = async () => {
+    if (!currentProjectId) return;
+    
+    if (selectedCaseId) {
+      await updateRequestCase(selectedCaseId, {
+        name: requestCases.find(c => c.id === selectedCaseId)?.name || '未命名用例',
+        method,
+        url,
+        params: JSON.stringify(params.filter(p => p.key)),
+        headers: JSON.stringify(headers.filter(h => h.key)),
+        body_type: bodyType,
+        body,
+      });
+      setCaseSaved(true);
+      setTimeout(() => setCaseSaved(false), 1500);
+      if (selectedApiId) {
+        loadRequestCases(selectedApiId, currentProjectId);
+      }
+    } else {
+      setShowNewCaseInput(true);
+    }
+  };
+
+  const handleCreateCase = async () => {
+    if (!currentProjectId || !newCaseName.trim()) return;
+    
+    const id = await createRequestCase({
+      api_id: selectedApiId,
+      project_id: currentProjectId,
+      name: newCaseName.trim(),
+      method,
+      url,
+      params: JSON.stringify(params.filter(p => p.key)),
+      headers: JSON.stringify(headers.filter(h => h.key)),
+      body_type: bodyType,
+      body,
+    });
+    
+    setSelectedCaseId(id as number);
+    setNewCaseName('');
+    setShowNewCaseInput(false);
+    setCaseSaved(true);
+    setTimeout(() => setCaseSaved(false), 1500);
+  };
+
+  const handleDeleteCase = async (caseItem: RequestCase, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`确定要删除用例"${caseItem.name}"吗？`)) return;
+    await deleteRequestCase(caseItem.id);
+    if (selectedCaseId === caseItem.id) {
+      setSelectedCaseId(null);
+    }
+    if (selectedApiId && currentProjectId) {
+      loadRequestCases(selectedApiId, currentProjectId);
+    }
   };
 
   const handleSend = async () => {
@@ -98,6 +224,57 @@ function RequestDebugger() {
       timeout: Number(settings.timeout) || 30000,
       apiId: selectedApiId,
     });
+
+    const state = useAppStore.getState();
+    if (selectedCaseId && state.requestResult) {
+      await updateRequestCase(selectedCaseId, {
+        name: requestCases.find(c => c.id === selectedCaseId)?.name || '未命名用例',
+        method,
+        url,
+        params: JSON.stringify(params.filter(p => p.key)),
+        headers: JSON.stringify(headers.filter(h => h.key)),
+        body_type: bodyType,
+        body,
+        last_status_code: state.requestResult.status,
+        last_duration: state.requestResult.duration,
+        last_response: state.requestResult.success 
+          ? JSON.stringify(state.requestResult.data) 
+          : state.requestResult.error || '',
+      });
+      if (selectedApiId && currentProjectId) {
+        loadRequestCases(selectedApiId, currentProjectId);
+      }
+    }
+  };
+
+  const handleSaveResponseAsExample = async () => {
+    if (!selectedApiId || !requestResult?.success) {
+      alert('请先选择接口并发送成功请求');
+      return;
+    }
+
+    const api = await loadApi(selectedApiId);
+    if (!api) return;
+
+    const responseBody = typeof requestResult.data === 'string' 
+      ? requestResult.data 
+      : JSON.stringify(requestResult.data, null, 2);
+
+    await updateApi(selectedApiId, {
+      name: api.name,
+      method: api.method,
+      path: api.path,
+      description: api.description,
+      request_params: api.request_params,
+      request_headers: api.request_headers,
+      request_body_type: api.request_body_type,
+      request_body: api.request_body,
+      response_description: '由实际请求保存',
+      response_body: responseBody,
+    }, '保存实际响应为示例');
+
+    setResponseSaved(true);
+    setTimeout(() => setResponseSaved(false), 2000);
   };
 
   const addParam = () => {
@@ -128,28 +305,6 @@ function RequestDebugger() {
     setHeaders(newHeaders);
   };
 
-  const selectApi = (api: API) => {
-    setSelectedApiId(api.id);
-    setMethod(api.method);
-    
-    let baseUrl = envVars.baseURL || '';
-    setUrl(baseUrl + api.path);
-
-    try {
-      setParams(JSON.parse(api.request_params || '[]'));
-    } catch {
-      setParams([]);
-    }
-    try {
-      setHeaders(JSON.parse(api.request_headers || '[]'));
-    } catch {
-      setHeaders([]);
-    }
-    setBodyType(api.request_body_type as any);
-    setBody(api.request_body || '');
-    setShowApiSelector(false);
-  };
-
   const formatJson = (data: any): string => {
     if (typeof data === 'string') return data;
     try {
@@ -167,6 +322,17 @@ function RequestDebugger() {
     return 'text-red-600';
   };
 
+  const getStatusBg = (status?: number) => {
+    if (!status) return 'bg-gray-100 text-gray-500';
+    if (status >= 200 && status < 300) return 'bg-green-100 text-green-700';
+    if (status >= 300 && status < 400) return 'bg-blue-100 text-blue-700';
+    if (status >= 400 && status < 500) return 'bg-orange-100 text-orange-700';
+    return 'bg-red-100 text-red-700';
+  };
+
+  const currentApi = apis.find((a: any) => a.id === selectedApiId);
+  const selectedCase = requestCases.find(c => c.id === selectedCaseId);
+
   if (!currentProjectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -179,23 +345,28 @@ function RequestDebugger() {
   return (
     <div className="h-full flex flex-col p-4">
       <div className="flex items-center gap-3 mb-4">
-        <div className="relative">
+        <div className="relative" ref={apiSelectorRef}>
           <button
-            className="btn btn-secondary flex items-center gap-1"
+            className="btn btn-secondary flex items-center gap-1 min-w-[200px] justify-between"
             onClick={() => setShowApiSelector(!showApiSelector)}
           >
-            📋 {selectedApiId ? apis.find(a => a.id === selectedApiId)?.name : '选择接口'}
+            <span className="truncate">
+              {selectedApiId ? (currentApi as any)?.name : '📋 选择接口'}
+            </span>
+            <span className="text-xs ml-2">▼</span>
           </button>
           {showApiSelector && (
-            <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-80 overflow-y-auto">
+            <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
               {apis.length === 0 ? (
                 <div className="p-3 text-sm text-gray-400 text-center">暂无接口</div>
               ) : (
-                apis.map((api: any) => (
+                (apis as any[]).map((api: API) => (
                   <div
                     key={api.id}
-                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm"
-                    onClick={() => selectApi(api as API)}
+                    className={`px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm ${
+                      selectedApiId === api.id ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => selectApi(api)}
                   >
                     <div className="flex items-center gap-2">
                       <span className={`method-badge text-xs ${METHOD_COLORS[api.method]}`}>
@@ -246,6 +417,13 @@ function RequestDebugger() {
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
         />
         <button
+          className={`btn ${caseSaved ? 'btn-success' : 'btn-secondary'}`}
+          onClick={handleSaveCase}
+          title="保存为用例"
+        >
+          {caseSaved ? '✓ 已保存' : '💾 存为用例'}
+        </button>
+        <button
           className="btn btn-primary"
           onClick={handleSend}
           disabled={isLoading}
@@ -254,6 +432,30 @@ function RequestDebugger() {
         </button>
       </div>
 
+      {showNewCaseInput && (
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2">
+          <span className="text-sm text-gray-600">用例名：</span>
+          <input
+            type="text"
+            className="input text-sm flex-1"
+            value={newCaseName}
+            onChange={(e) => setNewCaseName(e.target.value)}
+            placeholder="例如：登录成功"
+            autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && handleCreateCase()}
+          />
+          <button className="btn btn-primary text-sm" onClick={handleCreateCase}>
+            保存
+          </button>
+          <button
+            className="btn btn-secondary text-sm"
+            onClick={() => { setShowNewCaseInput(false); setNewCaseName(''); }}
+          >
+            取消
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex gap-4 overflow-hidden">
         <div className="flex-1 flex flex-col card overflow-hidden">
           <div className="border-b border-gray-200 flex">
@@ -261,6 +463,7 @@ function RequestDebugger() {
               { id: 'params', label: 'Params' },
               { id: 'headers', label: 'Headers' },
               { id: 'body', label: 'Body' },
+              { id: 'cases', label: `用例 (${requestCases.length})` },
               { id: 'history', label: '历史' },
             ].map((tab) => (
               <button
@@ -376,16 +579,66 @@ function RequestDebugger() {
               </div>
             )}
 
+            {activeTab === 'cases' && (
+              <div className="space-y-2">
+                {requestCases.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    <p className="text-sm">暂无调试用例</p>
+                    <p className="text-xs mt-1">编辑好请求后点击"存为用例"保存</p>
+                  </div>
+                ) : (
+                  requestCases.map((caseItem: any) => (
+                    <div
+                      key={caseItem.id}
+                      className={`p-3 rounded-lg border cursor-pointer group transition-colors ${
+                        selectedCaseId === caseItem.id
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => selectCase(caseItem)}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`method-badge text-xs ${METHOD_COLORS[caseItem.method]}`}>
+                            {caseItem.method}
+                          </span>
+                          <span className="font-medium text-sm text-gray-800">{caseItem.name}</span>
+                        </div>
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded text-red-500"
+                          onClick={(e) => handleDeleteCase(caseItem, e)}
+                          title="删除用例"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500 truncate font-mono mb-2">
+                        {caseItem.url}
+                      </div>
+                      {caseItem.last_status_code && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`px-1.5 py-0.5 rounded font-medium ${getStatusBg(caseItem.last_status_code)}`}>
+                            {caseItem.last_status_code}
+                          </span>
+                          <span className="text-gray-500">{caseItem.last_duration}ms</span>
+                          <span className="text-gray-400 text-xs ml-auto">
+                            {new Date(caseItem.updated_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
             {activeTab === 'history' && (
               <div className="space-y-2">
                 {requestHistory.length === 0 ? (
                   <p className="text-sm text-gray-400 py-8 text-center">暂无请求历史</p>
                 ) : (
                   requestHistory.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="p-2 hover:bg-gray-50 rounded cursor-pointer text-sm"
-                    >
+                    <div key={item.id} className="p-2 hover:bg-gray-50 rounded cursor-pointer text-sm">
                       <div className="flex items-center gap-2">
                         <span className={`method-badge text-xs ${METHOD_COLORS[item.method]}`}>
                           {item.method}
@@ -412,16 +665,28 @@ function RequestDebugger() {
         <div className="flex-1 flex flex-col card overflow-hidden">
           <div className="border-b border-gray-200 px-4 py-2 flex items-center justify-between">
             <h3 className="font-medium text-gray-700">响应结果</h3>
-            {requestResult && (
-              <div className="flex items-center gap-4 text-sm">
-                <span className={getStatusColor(requestResult.status)}>
-                  {requestResult.status} {requestResult.statusText}
-                </span>
-                <span className="text-gray-500">
-                  耗时: {requestResult.duration}ms
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {requestResult && requestResult.success && (
+                <button
+                  className={`text-sm ${responseSaved ? 'text-green-600' : 'text-blue-600 hover:text-blue-800'}`}
+                  onClick={handleSaveResponseAsExample}
+                  disabled={!selectedApiId}
+                  title={selectedApiId ? '保存为当前接口的响应示例' : '请先选择接口'}
+                >
+                  {responseSaved ? '✓ 已保存到接口' : '💾 存为响应示例'}
+                </button>
+              )}
+              {requestResult && (
+                <div className="flex items-center gap-3 text-sm">
+                  <span className={getStatusColor(requestResult.status)}>
+                    {requestResult.status} {requestResult.statusText}
+                  </span>
+                  <span className="text-gray-500">
+                    耗时: {requestResult.duration}ms
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-auto p-3">

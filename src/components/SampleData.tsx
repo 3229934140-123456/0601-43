@@ -10,6 +10,7 @@ function SampleData() {
   const [sampleType, setSampleType] = useState<'success' | 'error' | 'custom'>('success');
   const [generating, setGenerating] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [viewTab, setViewTab] = useState<'generated' | 'current'>('current');
 
   useEffect(() => {
     if (currentProjectId) {
@@ -19,44 +20,52 @@ function SampleData() {
 
   useEffect(() => {
     if (apis.length > 0 && !selectedApi) {
-      setSelectedApi(apis[0] as API);
+      const firstApi = apis[0] as API;
+      setSelectedApi(firstApi);
+      if (firstApi.response_body) {
+        setGeneratedSample(firstApi.response_body);
+        setViewTab('current');
+      }
     }
   }, [apis]);
+
+  useEffect(() => {
+    if (selectedApi?.response_body && viewTab === 'current') {
+      setGeneratedSample(selectedApi.response_body);
+    }
+  }, [selectedApi?.id]);
 
   const generateSample = () => {
     if (!selectedApi) return;
     setGenerating(true);
+    setViewTab('generated');
     
     setTimeout(() => {
       let sample: any = {};
+      const currentResponse = selectedApi.response_body;
       
       if (sampleType === 'success') {
-        sample = {
-          code: 0,
-          message: 'success',
-          data: generateMockData(selectedApi.response_body),
-          timestamp: Date.now(),
-          request_id: generateRequestId(),
-        };
+        if (currentResponse && currentResponse.trim()) {
+          try {
+            const parsed = JSON.parse(currentResponse);
+            sample = generateSuccessFromExisting(parsed);
+          } catch {
+            sample = buildSuccessSample(selectedApi.response_body);
+          }
+        } else {
+          sample = buildSuccessSample('');
+        }
       } else if (sampleType === 'error') {
-        const errorCodes = [
-          { code: 400, message: 'Bad Request - 请求参数错误' },
-          { code: 401, message: 'Unauthorized - 未授权' },
-          { code: 403, message: 'Forbidden - 禁止访问' },
-          { code: 404, message: 'Not Found - 资源不存在' },
-          { code: 500, message: 'Internal Server Error - 服务器内部错误' },
-        ];
-        const error = errorCodes[Math.floor(Math.random() * errorCodes.length)];
-        sample = {
-          code: error.code,
-          message: error.message,
-          error_details: {
-            field: 'example_field',
-            reason: '示例错误原因',
-          },
-          timestamp: Date.now(),
-          request_id: generateRequestId(),
-        };
+        if (currentResponse && currentResponse.trim()) {
+          try {
+            const parsed = JSON.parse(currentResponse);
+            sample = generateErrorFromExisting(parsed);
+          } catch {
+            sample = buildErrorSample();
+          }
+        } else {
+          sample = buildErrorSample();
+        }
       } else {
         try {
           sample = JSON.parse(selectedApi.response_body || '{}');
@@ -68,6 +77,124 @@ function SampleData() {
       setGeneratedSample(JSON.stringify(sample, null, 2));
       setGenerating(false);
     }, 500);
+  };
+
+  const buildSuccessSample = (template: string): any => {
+    return {
+      code: 0,
+      message: 'success',
+      data: generateMockData(template),
+      timestamp: Date.now(),
+      request_id: generateRequestId(),
+    };
+  };
+
+  const buildErrorSample = (): any => {
+    const errorCodes = [
+      { code: 400, message: 'Bad Request - 请求参数错误' },
+      { code: 401, message: 'Unauthorized - 未授权' },
+      { code: 403, message: 'Forbidden - 禁止访问' },
+      { code: 404, message: 'Not Found - 资源不存在' },
+      { code: 500, message: 'Internal Server Error - 服务器内部错误' },
+    ];
+    const error = errorCodes[Math.floor(Math.random() * errorCodes.length)];
+    return {
+      code: error.code,
+      message: error.message,
+      error_details: {
+        field: 'example_field',
+        reason: '示例错误原因',
+      },
+      timestamp: Date.now(),
+      request_id: generateRequestId(),
+    };
+  };
+
+  const generateSuccessFromExisting = (obj: any): any => {
+    const result: any = {};
+    const keys = Object.keys(obj);
+    
+    for (const key of keys) {
+      const keyLower = key.toLowerCase();
+      const value = obj[key];
+      
+      if (keyLower === 'code' || keyLower === 'errcode') {
+        result[key] = typeof value === 'number' ? 0 : '0';
+      } else if (keyLower === 'message' || keyLower === 'msg') {
+        result[key] = 'success';
+      } else if (keyLower === 'success') {
+        result[key] = true;
+      } else if (keyLower === 'error' || keyLower === 'errmsg' || keyLower === 'error_msg') {
+        delete result[key];
+      } else if (keyLower === 'error_details' || keyLower === 'errors') {
+        delete result[key];
+      } else if (keyLower === 'timestamp' || keyLower === 'time') {
+        result[key] = Date.now();
+      } else if (keyLower === 'request_id' || keyLower === 'requestid' || keyLower === 'trace_id') {
+        result[key] = generateRequestId();
+      } else {
+        result[key] = generateValueByKey(key, value);
+      }
+    }
+    
+    if (!keys.some(k => k.toLowerCase() === 'code' || k.toLowerCase() === 'errcode')) {
+      result.code = 0;
+    }
+    if (!keys.some(k => k.toLowerCase() === 'message' || k.toLowerCase() === 'msg')) {
+      result.message = 'success';
+    }
+    
+    return result;
+  };
+
+  const generateErrorFromExisting = (obj: any): any => {
+    const errorCodes = [
+      { code: 400, message: 'Bad Request - 请求参数错误' },
+      { code: 401, message: 'Unauthorized - 未授权' },
+      { code: 403, message: 'Forbidden - 禁止访问' },
+      { code: 404, message: 'Not Found - 资源不存在' },
+      { code: 500, message: 'Internal Server Error - 服务器内部错误' },
+    ];
+    const error = errorCodes[Math.floor(Math.random() * errorCodes.length)];
+    
+    const result: any = {};
+    const keys = Object.keys(obj);
+    
+    for (const key of keys) {
+      const keyLower = key.toLowerCase();
+      
+      if (keyLower === 'code' || keyLower === 'errcode') {
+        result[key] = typeof obj[key] === 'number' ? error.code : String(error.code);
+      } else if (keyLower === 'message' || keyLower === 'msg') {
+        result[key] = error.message;
+      } else if (keyLower === 'success') {
+        result[key] = false;
+      } else if (keyLower === 'data') {
+        result[key] = null;
+      } else if (keyLower === 'error' || keyLower === 'errmsg') {
+        result[key] = error.message;
+      } else if (keyLower === 'error_details' || keyLower === 'errors') {
+        result[key] = {
+          field: 'example_field',
+          reason: '示例错误原因',
+        };
+      } else if (keyLower === 'timestamp' || keyLower === 'time') {
+        result[key] = Date.now();
+      } else if (keyLower === 'request_id' || keyLower === 'requestid' || keyLower === 'trace_id') {
+        result[key] = generateRequestId();
+      } else {
+        result[key] = obj[key];
+      }
+    }
+    
+    if (!keys.some(k => k.toLowerCase() === 'code' || k.toLowerCase() === 'errcode')) {
+      result.code = error.code;
+    }
+    if (!keys.some(k => k.toLowerCase() === 'message' || k.toLowerCase() === 'msg')) {
+      result.message = error.message;
+    }
+    
+    return result;
   };
 
   const generateMockData = (template: string): any => {
@@ -132,6 +259,10 @@ function SampleData() {
       ];
     }
     
+    if (typeof templateValue === 'string' && templateValue.length > 0) {
+      return `示例${key}值`;
+    }
+    
     return `示例${key}值`;
   };
 
@@ -181,6 +312,18 @@ function SampleData() {
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
+  const handleSelectApi = async (api: API) => {
+    const freshApi = await loadApi(api.id);
+    const apiData = (freshApi || api) as API;
+    setSelectedApi(apiData);
+    if (apiData.response_body) {
+      setGeneratedSample(apiData.response_body);
+      setViewTab('current');
+    } else {
+      setGeneratedSample('');
+    }
+  };
+
   if (!currentProjectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -189,6 +332,8 @@ function SampleData() {
       </div>
     );
   }
+
+  const hasCurrentResponse = selectedApi?.response_body;
 
   return (
     <div className="h-full flex p-4 gap-4">
@@ -201,7 +346,7 @@ function SampleData() {
               className={`p-2 rounded cursor-pointer ${
                 selectedApi?.id === api.id ? 'bg-blue-50' : 'hover:bg-gray-50'
               }`}
-              onClick={() => setSelectedApi(api as API)}
+              onClick={() => handleSelectApi(api as API)}
             >
               <div className="flex items-center gap-2">
                 <span className={`method-badge text-xs ${METHOD_COLORS[api.method]}`}>
@@ -212,6 +357,9 @@ function SampleData() {
               <div className="text-xs text-gray-400 truncate mt-0.5 font-mono">
                 {api.path}
               </div>
+              {api.response_body && (
+                <div className="text-xs text-green-600 mt-1">✓ 有响应示例</div>
+              )}
             </div>
           ))}
         </div>
@@ -246,11 +394,40 @@ function SampleData() {
           >
             {generating ? '生成中...' : '🎲 生成示例数据'}
           </button>
+          {hasCurrentResponse && (
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              💡 生成将基于当前响应示例的结构继续修改
+            </p>
+          )}
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col">
           <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-sm text-gray-600">生成结果</span>
+            <div className="flex items-center gap-2">
+              <button
+                className={`text-sm px-3 py-1 rounded ${
+                  viewTab === 'current' ? 'bg-gray-200 text-gray-800' : 'text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => {
+                  setViewTab('current');
+                  if (selectedApi?.response_body) {
+                    setGeneratedSample(selectedApi.response_body);
+                  }
+                }}
+                disabled={!hasCurrentResponse}
+                title={hasCurrentResponse ? '' : '当前接口暂无响应示例'}
+              >
+                📄 当前响应
+              </button>
+              <button
+                className={`text-sm px-3 py-1 rounded ${
+                  viewTab === 'generated' ? 'bg-gray-200 text-gray-800' : 'text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => setViewTab('generated')}
+              >
+                🎲 生成结果
+              </button>
+            </div>
             {generatedSample && (
               <div className="flex gap-2">
                 <button className="text-sm text-blue-600 hover:text-blue-800" onClick={copyToClipboard}>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ProjectSpace from './components/ProjectSpace';
 import ApiDirectory from './components/ApiDirectory';
@@ -12,13 +12,16 @@ import { useAppStore } from './store/useAppStore';
 type ModuleType = 'projects' | 'directory' | 'debugger' | 'sample' | 'changelog' | 'review' | 'settings';
 
 function App() {
-  const [activeModule, setActiveModule] = useState<ModuleType>('projects');
-  const { loadProjects, loadSettings, currentProjectId } = useAppStore();
+  const { loadProjects, loadSettings, currentProjectId, activeModule, setActiveModule } = useAppStore();
 
   useEffect(() => {
     loadProjects();
     loadSettings();
   }, []);
+
+  const handleModuleChange = (module: ModuleType) => {
+    setActiveModule(module);
+  };
 
   const renderModule = () => {
     switch (activeModule) {
@@ -43,7 +46,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar activeModule={activeModule} onModuleChange={setActiveModule} />
+      <Sidebar activeModule={activeModule as ModuleType} onModuleChange={handleModuleChange} />
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center px-6">
           <h1 className="text-lg font-semibold text-gray-800">

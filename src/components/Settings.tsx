@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
 function Settings() {
-  const { settings, loadSettings, updateSetting, clearAllData } = useAppStore();
+  const { settings, loadSettings, updateSetting, clearAllData, setActiveModule } = useAppStore();
   
   const [username, setUsername] = useState('');
   const [theme, setTheme] = useState('light');
@@ -32,6 +32,7 @@ function Settings() {
     const result = await clearAllData();
     if (result.success) {
       alert('所有数据已清除');
+      setActiveModule('projects');
     } else {
       alert('清除失败: ' + result.error);
     }
