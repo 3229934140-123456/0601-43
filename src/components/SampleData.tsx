@@ -4,11 +4,12 @@ import { METHOD_COLORS } from '../types';
 import type { API } from '../types';
 
 function SampleData() {
-  const { projects, currentProjectId, apis, loadAllApis, currentApiId } = useAppStore();
+  const { projects, currentProjectId, apis, loadAllApis, currentApiId, updateApi, loadApi } = useAppStore();
   const [selectedApi, setSelectedApi] = useState<API | null>(null);
   const [generatedSample, setGeneratedSample] = useState<string>('');
   const [sampleType, setSampleType] = useState<'success' | 'error' | 'custom'>('success');
   const [generating, setGenerating] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     if (currentProjectId) {
@@ -153,9 +154,31 @@ function SampleData() {
     alert('已复制到剪贴板');
   };
 
-  const saveAsResponse = () => {
-    if (!selectedApi) return;
-    alert('已将示例数据保存到接口响应中');
+  const saveAsResponse = async () => {
+    if (!selectedApi || !generatedSample) return;
+    
+    const apiData = {
+      name: selectedApi.name,
+      method: selectedApi.method,
+      path: selectedApi.path,
+      description: selectedApi.description,
+      request_params: selectedApi.request_params,
+      request_headers: selectedApi.request_headers,
+      request_body_type: selectedApi.request_body_type,
+      request_body: selectedApi.request_body,
+      response_description: selectedApi.response_description || '由示例数据生成',
+      response_body: generatedSample,
+    };
+    
+    await updateApi(selectedApi.id, apiData, '保存示例数据到响应体');
+    
+    const updatedApi = await loadApi(selectedApi.id);
+    if (updatedApi) {
+      setSelectedApi(updatedApi as API);
+    }
+    
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   if (!currentProjectId) {
@@ -233,8 +256,11 @@ function SampleData() {
                 <button className="text-sm text-blue-600 hover:text-blue-800" onClick={copyToClipboard}>
                   📋 复制
                 </button>
-                <button className="text-sm text-green-600 hover:text-green-800" onClick={saveAsResponse}>
-                  💾 保存到接口
+                <button 
+                  className={`text-sm hover:text-green-800 ${saveSuccess ? 'text-green-600' : 'text-green-600'}`}
+                  onClick={saveAsResponse}
+                >
+                  {saveSuccess ? '✓ 已保存' : '💾 保存到接口'}
                 </button>
               </div>
             )}

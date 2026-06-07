@@ -13,6 +13,7 @@ function ApiDirectory() {
     apis,
     loadFolders,
     loadApis,
+    loadAllApis,
     createFolder,
     createApi,
     deleteFolder,
@@ -25,6 +26,7 @@ function ApiDirectory() {
   } = useAppStore();
 
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
+  const [showAllApis, setShowAllApis] = useState(true);
   const [selectedApi, setSelectedApi] = useState<API | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -39,15 +41,25 @@ function ApiDirectory() {
   useEffect(() => {
     if (currentProjectId) {
       loadFolders(currentProjectId);
-      loadApis(currentProjectId, currentFolderId);
+      if (showAllApis) {
+        loadAllApis(currentProjectId);
+      } else {
+        loadApis(currentProjectId, currentFolderId);
+      }
     }
-  }, [currentProjectId, currentFolderId]);
+  }, [currentProjectId, currentFolderId, showAllApis]);
 
   const handleSelectProject = (projectId: number) => {
     setCurrentProject(projectId);
     setCurrentFolderId(null);
+    setShowAllApis(true);
     setSelectedApi(null);
     setShowEditor(false);
+  };
+
+  const handleClickAllApis = () => {
+    setShowAllApis(true);
+    setCurrentFolderId(null);
   };
 
   const toggleFolder = (folderId: number) => {
@@ -97,7 +109,11 @@ function ApiDirectory() {
   const handleDeleteApi = async (api: API) => {
     if (!confirm(`确定要删除接口"${api.name}"吗？`)) return;
     await deleteApi(api.id);
-    loadApis(currentProjectId!, currentFolderId);
+    if (showAllApis) {
+      loadAllApis(currentProjectId!);
+    } else {
+      loadApis(currentProjectId!, currentFolderId);
+    }
     if (selectedApi?.id === api.id) {
       setSelectedApi(null);
       setShowEditor(false);
@@ -106,7 +122,11 @@ function ApiDirectory() {
 
   const handleToggleDeprecated = async (api: API) => {
     await toggleDeprecated(api.id, !api.is_deprecated);
-    loadApis(currentProjectId!, currentFolderId);
+    if (showAllApis) {
+      loadAllApis(currentProjectId!);
+    } else {
+      loadApis(currentProjectId!, currentFolderId);
+    }
     if (selectedApi?.id === api.id) {
       setSelectedApi({ ...selectedApi, is_deprecated: api.is_deprecated ? 0 : 1 });
     }
@@ -136,6 +156,7 @@ function ApiDirectory() {
           onClick={() => {
             toggleFolder(folder.id);
             setCurrentFolderId(folder.id);
+            setShowAllApis(false);
           }}
         >
           <span className="text-xs w-4">
@@ -209,8 +230,8 @@ function ApiDirectory() {
           {!searchKeyword.trim() && (
             <>
               <div
-                className={`tree-node ${currentFolderId === null ? 'tree-node-active' : ''}`}
-                onClick={() => setCurrentFolderId(null)}
+                className={`tree-node ${showAllApis ? 'tree-node-active' : ''}`}
+                onClick={handleClickAllApis}
               >
                 <span className="w-4"></span>
                 <span>🏠</span>
@@ -261,7 +282,7 @@ function ApiDirectory() {
         <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
           <div>
             <h3 className="font-medium text-gray-800">
-              {searchKeyword.trim() ? `搜索结果 (${searchResults.length})` : (currentFolderId ? folders.find(f => f.id === currentFolderId)?.name : '全部接口')}
+              {searchKeyword.trim() ? `搜索结果 (${searchResults.length})` : (showAllApis ? '全部接口' : (folders.find(f => f.id === currentFolderId)?.name || '未分组'))}
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
               共 {displayApis.length} 个接口
@@ -378,7 +399,11 @@ function ApiDirectory() {
           isEditing={isEditing}
           onClose={() => { setShowEditor(false); setSelectedApi(null); }}
           onSaved={() => {
-            loadApis(currentProjectId!, currentFolderId);
+            if (showAllApis) {
+              loadAllApis(currentProjectId!);
+            } else {
+              loadApis(currentProjectId!, currentFolderId);
+            }
             if (searchKeyword.trim()) {
               searchApis(currentProjectId!, searchKeyword);
             }

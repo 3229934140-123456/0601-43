@@ -650,3 +650,22 @@ ipcMain.handle('search-apis', (_event, projectId: number, keyword: string) => {
   `);
   return stmt.all(projectId, searchKeyword, searchKeyword, searchKeyword);
 });
+
+ipcMain.handle('clear-all-data', () => {
+  try {
+    db!.exec(`
+      DELETE FROM request_history;
+      DELETE FROM comments;
+      DELETE FROM review_items;
+      DELETE FROM api_versions;
+      DELETE FROM apis;
+      DELETE FROM folders;
+      DELETE FROM environments;
+      DELETE FROM projects;
+      DELETE FROM settings WHERE key != 'theme' AND key != 'username' AND key != 'timeout';
+    `);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});

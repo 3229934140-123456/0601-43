@@ -48,6 +48,8 @@ const api = {
   importProject: () => ipcRenderer.invoke('import-project'),
 
   searchApis: (projectId: number, keyword: string) => ipcRenderer.invoke('search-apis', projectId, keyword),
+
+  clearAllData: () => ipcRenderer.invoke('clear-all-data'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

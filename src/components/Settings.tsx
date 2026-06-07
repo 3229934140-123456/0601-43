@@ -2,33 +2,39 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
 function Settings() {
-  const { settings, loadSettings, updateSetting } = useAppStore();
+  const { settings, loadSettings, updateSetting, clearAllData } = useAppStore();
   
   const [username, setUsername] = useState('');
   const [theme, setTheme] = useState('light');
-  const [timeout, setTimeout] = useState('30000');
+  const [timeoutValue, setTimeoutValue] = useState('30000');
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (Object.keys(settings).length > 0) {
       setUsername(settings.username || '用户');
       setTheme(settings.theme || 'light');
-      setTimeout(settings.timeout || '30000');
+      setTimeoutValue(settings.timeout || '30000');
     }
   }, [settings]);
 
   const handleSave = async () => {
     await updateSetting('username', username);
     await updateSetting('theme', theme);
-    await updateSetting('timeout', timeout);
+    await updateSetting('timeout', timeoutValue);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    window.setTimeout(() => setSaved(false), 2000);
   };
 
-  const clearData = () => {
-    if (!confirm('确定要清除所有本地数据吗？此操作不可恢复！')) return;
-    if (!confirm('再次确认：清除所有数据？项目、接口、环境变量等所有数据都将被删除！')) return;
-    alert('已清除数据（演示）');
+  const clearData = async () => {
+    if (!window.confirm('确定要清除所有本地数据吗？此操作不可恢复！')) return;
+    if (!window.confirm('再次确认：清除所有数据？项目、接口、环境变量、评论、评审等所有数据都将被删除！')) return;
+    
+    const result = await clearAllData();
+    if (result.success) {
+      alert('所有数据已清除');
+    } else {
+      alert('清除失败: ' + result.error);
+    }
   };
 
   return (
@@ -87,8 +93,8 @@ function Settings() {
               <label className="block text-sm font-medium text-gray-700 mb-1">请求超时时间</label>
               <select
                 className="select"
-                value={timeout}
-                onChange={(e) => setTimeout(e.target.value)}
+                value={timeoutValue}
+                onChange={(e) => setTimeoutValue(e.target.value)}
               >
                 <option value="10000">10 秒</option>
                 <option value="30000">30 秒</option>

@@ -69,6 +69,8 @@ interface AppState {
 
   searchApis: (projectId: number, keyword: string) => Promise<void>;
   setSearchKeyword: (keyword: string) => void;
+
+  clearAllData: () => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -312,5 +314,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSearchKeyword: (keyword: string) => {
     set({ searchKeyword: keyword });
+  },
+
+  clearAllData: async () => {
+    const result = await (window as any).electronAPI.clearAllData();
+    if (result.success) {
+      set({
+        projects: [],
+        currentProjectId: null,
+        environments: [],
+        currentEnvironmentId: null,
+        folders: [],
+        apis: [],
+        currentApiId: null,
+        searchResults: [],
+        comments: [],
+        reviewItems: [],
+        apiVersions: [],
+        requestResult: null,
+        requestHistory: [],
+      });
+      await loadSettings();
+    }
+    return result;
   },
 }));

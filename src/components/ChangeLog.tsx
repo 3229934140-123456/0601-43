@@ -26,12 +26,38 @@ function ChangeLog() {
   };
 
   const handleCompare = () => {
-    if (!compareV1 || !compareV2 || !apiVersions.length) return;
+    if (!compareV1 || !compareV2 || !selectedApi) return;
     
-    const v1 = apiVersions.find(v => v.version === compareV1);
-    const v2 = apiVersions.find(v => v.version === compareV2);
+    const getVersionData = (versionNum: number): ApiVersion | null => {
+      if (versionNum === selectedApi!.version) {
+        return {
+          id: 0,
+          api_id: selectedApi!.id,
+          version: selectedApi!.version,
+          name: selectedApi!.name,
+          method: selectedApi!.method,
+          path: selectedApi!.path,
+          description: selectedApi!.description,
+          request_params: selectedApi!.request_params,
+          request_headers: selectedApi!.request_headers,
+          request_body_type: selectedApi!.request_body_type,
+          request_body: selectedApi!.request_body,
+          response_description: selectedApi!.response_description,
+          response_body: selectedApi!.response_body,
+          change_log: '当前版本',
+          created_at: selectedApi!.updated_at,
+        } as ApiVersion;
+      }
+      return apiVersions.find(v => v.version === versionNum) || null;
+    };
     
-    if (!v1 || !v2) return;
+    const v1 = getVersionData(compareV1);
+    const v2 = getVersionData(compareV2);
+    
+    if (!v1 || !v2) {
+      setDiffResult('找不到对应的版本数据');
+      return;
+    }
     
     const diff = generateDiff(v1, v2);
     setDiffResult(diff);
@@ -41,41 +67,56 @@ function ChangeLog() {
     const changes: string[] = [];
     
     if (v1.name !== v2.name) {
-      changes.push(`名称: ${v1.name} → ${v2.name}`);
+      changes.push(`📝 名称: "${v1.name}" → "${v2.name}"`);
     }
     if (v1.method !== v2.method) {
-      changes.push(`方法: ${v1.method} → ${v2.method}`);
+      changes.push(`🔀 方法: ${v1.method} → ${v2.method}`);
     }
     if (v1.path !== v2.path) {
-      changes.push(`路径: ${v1.path} → ${v2.path}`);
+      changes.push(`🛤️ 路径: ${v1.path} → ${v2.path}`);
     }
     if (v1.description !== v2.description) {
-      changes.push(`描述已变更`);
+      changes.push(`📄 描述已变更`);
     }
     if (v1.request_params !== v2.request_params) {
-      changes.push(`请求参数已变更`);
+      try {
+        const params1 = JSON.parse(v1.request_params || '[]');
+        const params2 = JSON.parse(v2.request_params || '[]');
+        changes.push(`📋 请求参数: ${params1.length} 个 → ${params2.length} 个`);
+      } catch {
+        changes.push(`📋 请求参数已变更`);
+      }
     }
     if (v1.request_headers !== v2.request_headers) {
-      changes.push(`请求头已变更`);
+      try {
+        const h1 = JSON.parse(v1.request_headers || '[]');
+        const h2 = JSON.parse(v2.request_headers || '[]');
+        changes.push(`📌 请求头: ${h1.length} 个 → ${h2.length} 个`);
+      } catch {
+        changes.push(`📌 请求头已变更`);
+      }
     }
     if (v1.request_body_type !== v2.request_body_type) {
-      changes.push(`请求体类型: ${v1.request_body_type} → ${v2.request_body_type}`);
+      changes.push(`📦 请求体类型: ${v1.request_body_type} → ${v2.request_body_type}`);
     }
     if (v1.request_body !== v2.request_body) {
-      changes.push(`请求体已变更`);
+      changes.push(`📦 请求体内容已变更`);
     }
     if (v1.response_description !== v2.response_description) {
-      changes.push(`响应描述已变更`);
+      changes.push(`📝 响应描述已变更`);
     }
     if (v1.response_body !== v2.response_body) {
-      changes.push(`响应体已变更`);
+      changes.push(`📤 响应体已变更`);
+    }
+    if (v1.change_log !== v2.change_log) {
+      changes.push(`📒 变更说明: ${v2.change_log}`);
     }
     
     if (changes.length === 0) {
-      return '两个版本完全相同';
+      return '✅ 两个版本完全相同，没有差异';
     }
     
-    return changes.map((c, i) => `${i + 1}. ${c}`).join('\n');
+    return `共发现 ${changes.length} 处变更:\n\n${changes.join('\n')}`;
   };
 
   if (!currentProjectId) {
